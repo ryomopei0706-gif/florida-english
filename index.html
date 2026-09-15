@@ -377,7 +377,9 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
     <div class="set"><div class="k">音声判定のきびしさ<small id="strict-v">70%</small></div><input type="range" id="set-strict" min="0.5" max="0.95" step="0.05"></div>
     <div class="set"><div class="k">読み上げの声</div><select id="set-voice"><option value="">自動</option></select></div>
     <button class="btn line sm" id="btn-voice-test">テスト再生 “Could I get a map, please?”</button>
+    <button class="btn line sm" id="btn-mic-test">🎤 マイクの診断（英語で何か話す）</button>
     <p class="note" id="sr-note"></p>
+    <p class="note" id="mic-result"></p>
   </div>
 
   <div class="card">
@@ -439,7 +441,7 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
 <script>
 'use strict';
 /* ================= state ================= */
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const KEY = 'florida500_v1';
 const DUR = {3:8, 5:14, 10:28, 20:55};
 const TITLES = ['旅の準備中','パスポート取得','荷造り完了','空港に到着','チェックイン完了','保安検査を通過','搭乗ゲートへ','離陸','太平洋を横断中','乗り継ぎ成功','オーランドに着陸','入国審査クリア','ホテルにチェックイン','パークデビュー','パレードを制覇','花火を見届けた','パークホッパー','ローカルの常連','フロリダ通','フロリダマスター'];
@@ -546,6 +548,19 @@ function speak(text, rate, onend){
 }
 function unlockAudio(){ try{ const u=new SpeechSynthesisUtterance(''); u.volume=0; speechSynthesis.speak(u);}catch(e){} }
 
+const IS_STANDALONE = !!(navigator.standalone || matchMedia('(display-mode: standalone)').matches);
+function recErrorText(err){
+  if(err==='unsupported') return IS_STANDALONE
+    ? 'ホーム画面版では iOS の制限で音声認識が使えないことがあります。下の「Safariで開く」から開き直してください'
+    : 'このブラウザでは音声認識が使えません。iPhone の Safari で開いてください';
+  if(err==='not-allowed'||err==='service-not-allowed') return 'マイクまたは音声認識が許可されていません。iPhoneの 設定 › アプリ › Safari › マイク を「許可」にし、設定 › 一般 › キーボード › 音声入力 をオンにしてください';
+  if(err==='no-speech') return '声が聞こえませんでした。もう一度どうぞ';
+  if(err==='audio-capture') return 'マイクが見つかりません。他のアプリがマイクを使っていないか確認してください';
+  if(err==='network') return '音声認識サーバーに接続できません。通信状態を確認してください';
+  if(err==='aborted') return '中断されました。もう一度どうぞ';
+  return 'エラー: '+err;
+}
+const openInSafariHtml = IS_STANDALONE ? `<a class="btn line sm" href="${location.href.split('#')[0]}" target="_blank" rel="noopener">Safariで開く</a>` : '';
 let rec=null, recTimer=null;
 function stopRec(){ if(rec){ try{ rec.onend=null; rec.onresult=null; rec.onerror=null; rec.abort(); }catch(e){} rec=null; } clearTimeout(recTimer); }
 function startRec({onInterim, onFinal, onError}){
@@ -677,7 +692,7 @@ function renderSettings(){
   $('#set-strict').value=st.strict; $('#strict-v').textContent=Math.round(st.strict*100)+'% 一致で正解';
   ['speaking','listening','reading'].forEach(m=>$('#mix-'+m).classList.toggle('on', st.mixModes[m]));
   fillVoiceSelect();
-  $('#sr-note').textContent = SR? '音声認識: この端末で使えます（初回はマイクの許可が出ます）' : '音声認識: この環境では使えないため、話す問題は自己採点になります。iPhoneのSafariで開くと使えます。';
+  $('#sr-note').textContent = SR? '音声認識: この端末で使えます（初回はマイクの許可が出ます）。反応しないときは上の診断を押してください' : '音声認識: '+recErrorText('unsupported')+'。話す問題は自己採点になります';
   $('#ver').textContent = `v${VERSION} · ${WORDS.length} words`;
 }
 $('#set-goal').addEventListener('change',e=>{ if(e.target.value){ S.settings.goal=e.target.value; save(); } });
@@ -687,6 +702,13 @@ $('#set-rate').addEventListener('input',e=>{ S.settings.rate=+e.target.value; $(
 $('#set-strict').addEventListener('input',e=>{ S.settings.strict=+e.target.value; $('#strict-v').textContent=Math.round(S.settings.strict*100)+'% 一致で正解'; save(); });
 $('#set-voice').addEventListener('change',e=>{ S.settings.voice=e.target.value; save(); });
 $('#btn-voice-test').addEventListener('click',()=>speak('Could I get a map, please?'));
+$('#btn-mic-test').addEventListener('click',()=>{
+  const out=$('#mic-result'); const env=`環境: ${IS_STANDALONE?'ホーム画面アプリ':'ブラウザ'} / 認識API: ${SR?'あり':'なし'} / ${navigator.userAgent.match(/OS (\d+_\d+)/)? 'iOS '+navigator.userAgent.match(/OS (\d+_\d+)/)[1].replace('_','.') : navigator.platform}`;
+  out.textContent = env+' … 聞き取り中（何か英語で話してください）';
+  startRec({ onInterim:t=>{ out.textContent=env+' … 聞き取り中: '+t; },
+    onFinal:alts=>{ out.textContent = env+(alts.length? ` … 成功！ 聞き取り結果: 「${alts[0]}」` : ' … 声が取れませんでした（無音）'); },
+    onError:err=>{ out.textContent = env+' … 失敗 ['+err+'] '+recErrorText(err); if(openInSafariHtml && !$('#open-safari2')){ const d=document.createElement('div'); d.id='open-safari2'; d.innerHTML=openInSafariHtml; out.after(d); } } });
+});
 ['speaking','listening','reading'].forEach(m=>$('#mix-'+m).addEventListener('click',()=>{ const mm=S.settings.mixModes; mm[m]=!mm[m]; if(!Object.values(mm).some(Boolean)) mm[m]=true; save(); renderSettings(); }));
 $('#btn-export').addEventListener('click',()=>{ $('#bk').value=JSON.stringify(S); toast('書き出しました'); });
 $('#btn-copy').addEventListener('click',async()=>{ const txt=JSON.stringify(S); $('#bk').value=txt; try{ await navigator.clipboard.writeText(txt); toast('コピーしました'); }catch(e){ $('#bk').select(); toast('テキストを選択してコピーしてください'); } });
@@ -755,9 +777,9 @@ function renderSpeaking(q, body, cat){
     <div class="qcard">${cat}<div class="prompt ja">${esc(isP? w.exja : w.ja)}</div>
       <div class="hint">${isP? `キーワード <b>${esc(w.en)}</b> を使って英語で言ってみる` : '英語で言ってみる'}</div>
       <div id="ans"></div></div>
-    <div class="heard" id="heard"><small>HEARD</small><span id="heard-t">${SR? 'マイクをタップして話す' : 'この環境では音声認識が使えません。声に出してから自己採点してください。'}</span></div>
+    <div class="heard" id="heard"><small>HEARD</small><span id="heard-t">${SR? 'マイクをタップして話す' : recErrorText('unsupported')+'。声に出してから自己採点もできます'}</span></div>
     <div class="mic-wrap"><button class="mic" id="mic" aria-label="話す"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></button><span class="mic-l" id="mic-l">${SR?'タップして話す':'自己採点モード'}</span></div>
-    <div class="s-foot" id="foot"><button class="btn ghost" id="reveal">答えを見る</button></div>`;
+    <div class="s-foot" id="foot">${SR?'':openInSafariHtml}<button class="btn ghost" id="reveal">答えを見る</button></div>`;
   const mic=$('#mic'), heard=$('#heard-t'), foot=$('#foot');
   let answered=false;
   function finishWith(correct, viaVoice, hyp, sc){
@@ -789,7 +811,8 @@ function renderSpeaking(q, body, cat){
       },
       onError: err=>{
         mic.classList.remove('rec'); $('#mic-l').textContent='タップして話す';
-        heard.textContent = err==='not-allowed'||err==='service-not-allowed'? 'マイクが許可されていません。設定 › Safari › マイク を確認してください' : err==='no-speech'? '声が聞こえませんでした。もう一度' : err==='unsupported'? '音声認識が使えません' : `エラー: ${err}`;
+        heard.textContent = recErrorText(err);
+        if((err==='unsupported'||err==='not-allowed'||err==='service-not-allowed') && openInSafariHtml && !$('#open-safari')){ const d=document.createElement('div'); d.id='open-safari'; d.innerHTML=openInSafariHtml; foot.prepend(d); }
       }
     });
   });
