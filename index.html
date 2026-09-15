@@ -89,6 +89,8 @@ p{margin:0}
 .pass-days .l{font-size:11px;color:var(--pass-muted);margin-top:4px}
 .pass-map{padding:8px 12px 0}
 .pass-map svg{width:100%;height:auto;display:block;overflow:visible}
+.walker-bob{animation:bob 1.1s ease-in-out infinite alternate}
+@keyframes bob{from{transform:translateY(0)}to{transform:translateY(-1.5px)}}
 .pass-foot{display:flex;justify-content:space-between;gap:12px;padding:10px 20px 16px;border-top:1px dashed var(--pass-line);margin-top:6px;font-size:12px;color:var(--pass-muted)}
 .pass-foot b{color:var(--pass-ink);font-weight:600}
 .pass::before,.pass::after{content:"";position:absolute;width:22px;height:22px;border-radius:50%;background:var(--bg);left:-11px;top:var(--notch)}
@@ -269,17 +271,34 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
   <div class="pass" style="--notch:118px">
     <div class="pass-top"><span>FLT 500 · ECONOMY</span><span id="pass-goal-label">NOV 14, 2026</span></div>
     <div class="pass-route">
-      <div><div class="code">KIX</div><div class="city">Osaka · 出発準備</div></div>
+      <div><div class="code">HOME</div><div class="city">自宅 · 学習中</div></div>
       <div class="pass-days"><div class="n tnum" id="days-left">—</div><div class="l">出発まで（日）</div></div>
-      <div class="right"><div class="code">MCO</div><div class="city">Orlando · ゴール</div></div>
+      <div class="right"><div class="code">KIX</div><div class="city">関西空港 · 出発日</div></div>
     </div>
     <div class="pass-map">
       <svg viewBox="0 0 360 96" aria-hidden="true">
-        <path id="route-bg" d="M18 78 C 100 6, 260 6, 342 78" fill="none" stroke="var(--pass-line)" stroke-width="2" stroke-dasharray="4 6"/>
-        <path id="route" d="M18 78 C 100 6, 260 6, 342 78" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"/>
-        <circle cx="18" cy="78" r="5" fill="var(--pass-ink)"/>
-        <g transform="translate(342 78)"><circle r="5" fill="var(--accent)"/><text x="0" y="-12" text-anchor="middle" font-size="16">🌴</text></g>
-        <g id="plane"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" fill="#fff" transform="translate(-12 -12)"/></g>
+        <!-- 道 -->
+        <line x1="36" y1="72" x2="296" y2="72" stroke="var(--pass-line)" stroke-width="2" stroke-dasharray="4 6"/>
+        <line id="route" x1="36" y1="72" x2="36" y2="72" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- 家 -->
+        <g transform="translate(18 72)">
+          <path d="M-13 0 v-14 l13 -11 l13 11 v14 z" fill="var(--pass-ink)"/>
+          <path d="M-16 -13 l16 -14 l16 14" fill="none" stroke="var(--pass-ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="-4" y="-9" width="8" height="9" rx="1" fill="var(--pass)"/>
+          <rect x="5" y="-22" width="4" height="7" fill="var(--pass-ink)"/>
+        </g>
+        <!-- 飛行機（出発日） -->
+        <g transform="translate(322 60)">
+          <ellipse cx="0" cy="14" rx="20" ry="2.5" fill="var(--pass-line)"/>
+          <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" fill="var(--accent)" transform="rotate(90) scale(1.5) translate(-12 -12)"/>
+        </g>
+        <!-- 歩く人 -->
+        <g id="walker" transform="translate(36 72)"><g class="walker-bob">
+          <circle cx="0" cy="-24" r="4" fill="#fff"/>
+          <path d="M0 -19 v11 M0 -8 l-5 8 M0 -8 l5 8 M0 -16 l-5 6 M0 -16 l6 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="6" y="-11" width="7" height="10" rx="1.5" fill="var(--accent)"/>
+          <path d="M8 -11 v-2.5 h3 v2.5" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+        </g></g>
       </svg>
     </div>
     <div class="pass-foot">
@@ -420,7 +439,7 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
 <script>
 'use strict';
 /* ================= state ================= */
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const KEY = 'florida500_v1';
 const DUR = {3:8, 5:14, 10:28, 20:55};
 const TITLES = ['旅の準備中','パスポート取得','荷造り完了','空港に到着','チェックイン完了','保安検査を通過','搭乗ゲートへ','離陸','太平洋を横断中','乗り継ぎ成功','オーランドに着陸','入国審査クリア','ホテルにチェックイン','パークデビュー','パレードを制覇','花火を見届けた','パークホッパー','ローカルの常連','フロリダ通','フロリダマスター'];
@@ -590,11 +609,9 @@ function renderHome(){
   const total=Math.max(1,daysBetween(st.start, st.goal)); const done=Math.min(Math.max(daysBetween(st.start, today()),0), total);
   $('#day-n').textContent = daysBetween(st.start, today())+1;
   const frac = total>0? done/total : 1;
-  const route=$('#route'), len=route.getTotalLength();
-  route.setAttribute('stroke-dasharray', `${len*frac} ${len}`);
-  const pt=route.getPointAtLength(len*frac), pt2=route.getPointAtLength(Math.min(len, len*frac+2));
-  const ang=Math.atan2(pt2.y-pt.y, pt2.x-pt.x)*180/Math.PI + 90;
-  $('#plane').setAttribute('transform', `translate(${pt.x} ${pt.y}) rotate(${ang}) scale(1.1)`);
+  const x0=36, x1=296, wx = x0 + (x1-x0)*frac;
+  $('#route').setAttribute('x2', wx);
+  $('#walker').setAttribute('transform', `translate(${wx} 72)`);
   const mastered=totalMastered(); $('#mastered-n').textContent = mastered;
   $('#pace-n').textContent = left>0? Math.ceil((500-mastered)/left) : '—';
   const L=levelOf(p.xp); $('#lv-n').textContent = L; $('#lv-title').textContent = titleOf(L);
