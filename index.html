@@ -810,7 +810,7 @@ function renderListening(q, body, cat){
       <div id="ans"></div></div>
     <div class="choices" id="choices">${opts.map((o,i)=>`<button class="choice" data-i="${i}">${esc(o)}</button>`).join('')}</div>
     <div class="s-foot" id="foot"></div>`;
-  const play=(r)=>{ $('#play').classList.add('playing'); speak(target, r, ()=>$('#play').classList.remove('playing')); };
+  const play=(r)=>{ const p=$('#play'); if(!p) return; p.classList.add('playing'); speak(target, r, ()=>{ const p2=$('#play'); if(p2) p2.classList.remove('playing'); }); };
   $('#play').addEventListener('click',()=>play()); $('#again').addEventListener('click',()=>play()); $('#slow').addEventListener('click',()=>play(0.65));
   setTimeout(()=>play(), 300);
   $$('#choices .choice').forEach(b=>b.addEventListener('click',()=>{
