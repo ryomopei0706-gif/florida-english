@@ -170,6 +170,10 @@ p{margin:0}
 .dot.new{background:var(--muted)} .dot.learning{background:var(--warn)} .dot.weak{background:var(--ng)} .dot.mastered{background:var(--ok)}
 .spk{width:36px;height:36px;border-radius:12px;background:var(--lagoon-soft);color:var(--lagoon);display:grid;place-items:center;flex:none}
 .spk svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.star{font-size:22px;line-height:1;color:var(--line);padding:4px 6px;border-radius:8px;flex:none;transition:transform .1s}
+.star.on{color:var(--warn)}
+.star:active{transform:scale(1.2)}
+.catrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
 .legend span{display:flex;align-items:center;gap:5px}
 
@@ -341,7 +345,10 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
     <div class="field"><span class="lab">範囲</span>
       <button class="range-btn" id="range-btn"><span id="range-label">すべてのジャンル</span><span>変更 ›</span></button></div>
     <button class="btn primary" id="btn-start">学習を始める</button>
-    <button class="btn ghost sm" id="btn-weak">苦手だけ集中（<span id="weak-n">0</span>語）</button>
+    <div class="row2">
+      <button class="btn ghost sm" id="btn-weak">苦手だけ集中（<span id="weak-n">0</span>）</button>
+      <button class="btn ghost sm" id="btn-star">★ 星つきを復習（<span id="star-n">0</span>）</button>
+    </div>
   </div>
 
   <div>
@@ -363,7 +370,7 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
     <input id="q" type="search" placeholder="英語・日本語で検索" autocomplete="off">
   </div>
   <div class="hscroll" id="wcats"></div>
-  <div class="legend"><span><i class="dot new" style="display:inline-block;width:9px;height:9px;border-radius:50%"></i>未学習</span><span><i class="dot learning" style="display:inline-block;width:9px;height:9px;border-radius:50%"></i>学習中</span><span><i class="dot weak" style="display:inline-block;width:9px;height:9px;border-radius:50%"></i>苦手</span><span><i class="dot mastered" style="display:inline-block;width:9px;height:9px;border-radius:50%"></i>習得</span></div>
+  <div class="legend"><span><i class="dot new" style="display:inline-block;width:9px;height:9px;border-radius:50%"></i>未学習</span><span><i class="dot learning" style="display:inline-block;width:9px;height:9px;border-radius:50%"></i>学習中</span><span><i class="dot weak" style="display:inline-block;width:9px;height:9px;border-radius:50%"></i>苦手</span><span><i class="dot mastered" style="display:inline-block;width:9px;height:9px;border-radius:50%"></i>習得</span><span style="color:var(--warn)">★ 復習したい印</span></div>
   <div class="wlist" id="wlist"></div>
 </section>
 
@@ -451,7 +458,7 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
 <script>
 'use strict';
 /* ================= state ================= */
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 DIALOGS.forEach((d,i)=>{ d.id='d'+i; d.en=d.q; d.ja=d.qja; d.ex=d.a; d.exja=d.aja; });
 const KEY = 'florida500_v1';
 const DUR = {3:8, 5:14, 10:28, 20:55};
@@ -484,6 +491,7 @@ function defaults(){ return {
   v:1,
   settings:{goal:'2026-11-14', start:today(), duration:5, mode:'mix', cats:[], autoPlay:true, strict:0.7, rate:0.95, voice:'', quizDir:'mix', dialogMute:false, mixModes:{speaking:true,listening:true,reading:true,quiz:true,dialog:true}},
   stats:{},
+  stars:{},
   profile:{xp:0, sessions:0, answered:0, correct:0, voiceCorrect:0, days:{}, streak:0, bestStreak:0, lastDay:null, badges:[]}
 };}
 let S = defaults();
@@ -494,6 +502,7 @@ let S = defaults();
   S.settings.mixModes = Object.assign({speaking:true,listening:true,reading:true,quiz:true,dialog:true}, (saved.settings||{}).mixModes||{});
   S.settings.cats = Array.isArray(S.settings.cats)? S.settings.cats : [];
   S.stats = saved.stats||{};
+  S.stars = saved.stars||{};
   Object.assign(S.profile, saved.profile||{});
 })();
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast('保存に失敗しました（容量不足の可能性）'); } }
@@ -510,18 +519,24 @@ function statusOf(id){
   return 'learning';
 }
 function weightOf(id){
-  const s=S.stats[id]; if(!s) return 1.2;
+  const s=S.stats[id]; if(!s) return isStar(id)? 1.9 : 1.2;
   const acc=s.c/s.a; const days=(Date.now()-s.l)/86400000;
   let w = 0.15 + (1-acc)*2.2;
   if(s.s>=3 && acc>=0.8) w = 0.1;
   if(s.s<0) w += 0.4*Math.min(-s.s,3);
   w *= 1 + Math.min(days,10)/5;
+  if(isStar(id)) w *= 1.6;
   return w;
 }
 const catTotal = c => WORDS.filter(w=>w.c===c).length;
 const catMastered = c => WORDS.filter(w=>w.c===c && statusOf(w.id)==='mastered').length;
 const totalMastered = () => WORDS.filter(w=>statusOf(w.id)==='mastered').length;
 const weakIds = () => WORDS.filter(w=>statusOf(w.id)==='weak').map(w=>w.id);
+const isStar = id => !!S.stars[String(id)];
+function toggleStar(id){ const k=String(id); if(S.stars[k]) delete S.stars[k]; else S.stars[k]=1; save(); }
+const starIds = () => Object.keys(S.stars).map(k=>/^d/.test(k)? k : Number(k));
+const starBtn = id => `<button class="star ${isStar(id)?'on':''}" data-id="${id}" aria-label="星をつける">★</button>`;
+document.addEventListener('click', e=>{ const b=e.target.closest('.star'); if(!b) return; e.stopPropagation(); toggleStar(b.dataset.id); b.classList.toggle('on', isStar(b.dataset.id)); toast(isStar(b.dataset.id)? '★ 星をつけました（ホームから復習できます）' : '星を外しました'); if($('#s-home').classList.contains('active')) renderHome(); });
 
 /* ================= UI helpers ================= */
 let toastT;
@@ -655,6 +670,7 @@ function renderHome(){
   $('#setup-sub').textContent = `${n}問 · 約${st.duration}分`;
   $('#btn-start').textContent = `学習を始める · ${n}問`;
   const wk=weakIds().length; $('#weak-n').textContent = wk; $('#btn-weak').disabled = wk===0;
+  const sk=starIds().length; $('#star-n').textContent = sk; $('#btn-star').disabled = sk===0;
   // board
   $('#board').innerHTML = CATEGORIES.map(c=>{ const t=catTotal(c.id), m=catMastered(c.id); return `<button class="cat ${m===t?'done':''}" data-c="${c.id}"><span class="ic">${c.icon}</span><span class="nm">${esc(c.name)}</span><span class="num"><b>${m}</b> / ${t}</span><span class="bar"><i style="width:${Math.round(m/t*100)}%"></i></span></button>`; }).join('');
   $$('#board .cat').forEach(b=>b.addEventListener('click',()=>{ S.settings.cats=[+b.dataset.c]; save(); startSession(); }));
@@ -668,6 +684,7 @@ $$('#seg-mode button').forEach(b=>b.addEventListener('click',()=>{ S.settings.mo
 $$('#seg-qdir button').forEach(b=>b.addEventListener('click',()=>{ S.settings.quizDir=b.dataset.v; save(); renderHome(); }));
 $('#btn-start').addEventListener('click',()=>startSession());
 $('#btn-weak').addEventListener('click',()=>startSession({ids:weakIds(), label:'苦手集中'}));
+$('#btn-star').addEventListener('click',()=>startSession({ids:starIds(), label:'★ 星つき'}));
 
 /* category sheet */
 $('#range-btn').addEventListener('click',()=>{ renderCatChips(); $('#sheet-cats').hidden=false; });
@@ -681,15 +698,16 @@ $('#sheet-cats').addEventListener('click',e=>{ if(e.target.id==='sheet-cats'){ $
 let wcat=-1;
 function renderWords(){
   $('#words-count').textContent = `${totalMastered()} / ${WORDS.length} 習得`;
-  $('#wcats').innerHTML = `<button class="chip ${wcat===-1?'on':''}" data-c="-1">すべて</button>` + CATEGORIES.map(c=>`<button class="chip ${wcat===c.id?'on':''}" data-c="${c.id}">${c.icon} ${esc(c.name)}</button>`).join('');
-  $$('#wcats .chip').forEach(ch=>ch.addEventListener('click',()=>{ wcat=+ch.dataset.c; renderWords(); }));
+  $('#wcats').innerHTML = `<button class="chip ${wcat===-1?'on':''}" data-c="-1">すべて</button><button class="chip ${wcat==='star'?'on':''}" data-c="star">★ 星つき</button>` + CATEGORIES.map(c=>`<button class="chip ${wcat===c.id?'on':''}" data-c="${c.id}">${c.icon} ${esc(c.name)}</button>`).join('');
+  $$('#wcats .chip').forEach(ch=>ch.addEventListener('click',()=>{ wcat= ch.dataset.c==='star'? 'star' : +ch.dataset.c; renderWords(); }));
   renderWordList();
 }
 function renderWordList(){
   const q=$('#q').value.trim().toLowerCase();
-  const list = WORDS.filter(w=>(wcat<0||w.c===wcat) && (!q || w.en.toLowerCase().includes(q) || w.ja.includes(q) || w.ex.toLowerCase().includes(q) || w.exja.includes(q)));
-  $('#wlist').innerHTML = list.map(w=>{ const st=statusOf(w.id); const s=S.stats[w.id]; return `<div class="wrow" data-id="${w.id}"><div class="top"><span class="dot ${st}"></span><span class="en">${esc(w.en)}</span><button class="spk" data-say="${esc(w.en)}" aria-label="読み上げ">${SPK_SVG}</button></div><div class="ja">${esc(w.ja)}</div><div class="more" hidden><div class="ex">${esc(w.ex)} <button class="spk" data-say="${esc(w.ex)}" style="display:inline-grid;vertical-align:middle;width:28px;height:28px;margin-left:4px" aria-label="例文を読み上げ">${SPK_SVG}</button></div><div class="exja">${esc(w.exja)}</div><div class="meta"><span>${CATEGORIES[w.c].icon} ${esc(CATEGORIES[w.c].name)}</span><span class="tnum">${s? `${s.c}/${s.a} 正解 · 直近 ${histDots(s.h)}` : '未学習'}</span></div></div></div>`; }).join('') || '<p class="sub" style="text-align:center;padding:30px 0">見つかりませんでした</p>';
-  $$('#wlist .wrow').forEach(r=>r.addEventListener('click',e=>{ if(e.target.closest('.spk')) return; const m=r.querySelector('.more'); m.hidden=!m.hidden; }));
+  const base = wcat==='star'? WORDS.filter(w=>isStar(w.id)).concat(DIALOGS.filter(d=>isStar(d.id))) : WORDS.filter(w=>wcat<0||w.c===wcat);
+  const list = base.filter(w=>(!q || w.en.toLowerCase().includes(q) || w.ja.includes(q) || w.ex.toLowerCase().includes(q) || w.exja.includes(q)));
+  $('#wlist').innerHTML = list.map(w=>{ const st=statusOf(w.id); const s=S.stats[w.id]; return `<div class="wrow" data-id="${w.id}"><div class="top"><span class="dot ${st}"></span><span class="en">${esc(w.en)}</span>${starBtn(w.id)}<button class="spk" data-say="${esc(w.en)}" aria-label="読み上げ">${SPK_SVG}</button></div><div class="ja">${esc(w.ja)}</div><div class="more" hidden><div class="ex">${esc(w.ex)} <button class="spk" data-say="${esc(w.ex)}" style="display:inline-grid;vertical-align:middle;width:28px;height:28px;margin-left:4px" aria-label="例文を読み上げ">${SPK_SVG}</button></div><div class="exja">${esc(w.exja)}</div><div class="meta"><span>${CATEGORIES[w.c].icon} ${esc(CATEGORIES[w.c].name)}</span><span class="tnum">${s? `${s.c}/${s.a} 正解 · 直近 ${histDots(s.h)}` : '未学習'}</span></div></div></div>`; }).join('') || `<p class="sub" style="text-align:center;padding:30px 0">${wcat==='star'?'星つきはまだありません。学習中のカードや単語帳の ★ を押すと付きます':'見つかりませんでした'}</p>`;
+  $$('#wlist .wrow').forEach(r=>r.addEventListener('click',e=>{ if(e.target.closest('.spk')||e.target.closest('.star')) return; const m=r.querySelector('.more'); m.hidden=!m.hidden; }));
   $$('#wlist .spk').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); speak(b.dataset.say); }));
 }
 const histDots = h => h? h.split('').map(c=>c==='1'?'●':'○').join('') : '';
@@ -795,7 +813,7 @@ function record(q, correct, viaVoice){
 function renderQ(){
   const q=sess.q[sess.i]; const body=$('#s-body'); stopRec(); speechSynthesis.cancel();
   $('#s-cnt').textContent = `${sess.i+1} / ${sess.q.length}`; $('#s-bar').style.width = (sess.i/sess.q.length*100)+'%';
-  const cat=`<span class="catl">${CATEGORIES[q.w.c].icon} ${esc(CATEGORIES[q.w.c].name)}${sess.label?` · ${sess.label}`:''}</span>`;
+  const cat=`<div class="catrow"><span class="catl">${CATEGORIES[q.w.c].icon} ${esc(CATEGORIES[q.w.c].name)}${sess.label?` · ${sess.label}`:''}</span>${starBtn(q.w.id)}</div>`;
   if(q.mode==='speaking') renderSpeaking(q, body, cat);
   else if(q.mode==='listening') renderListening(q, body, cat);
   else if(q.mode==='quiz') renderQuiz(q, body, cat);
@@ -986,7 +1004,7 @@ function renderResult(){
     ${after>before? `<div class="lvup">🎉 レベルアップ！ Lv.${after} 「${titleOf(after)}」</div>`:''}
     ${newBadges.map(b=>`<div class="lvup" style="background:var(--lagoon-soft);color:var(--lagoon)">${b.ic} 実績「${b.nm}」を獲得</div>`).join('')}
     <div class="card"><div class="level"><div class="badge tnum">${after}</div><div class="t"><b>${titleOf(after)}</b><span>${p.xp} XP · 次まで ${cum(after+1)-p.xp} XP</span></div></div><div class="bar acc"><i style="width:${Math.round((p.xp-cum(after))/(cum(after+1)-cum(after))*100)}%"></i></div></div>
-    ${uniq.length? `<div><div class="h-row" style="margin-bottom:10px"><h2>今回の苦手</h2><span class="sub">${uniq.length}語</span></div><div class="miss-list">${uniq.map(w=>`<div class="wrow"><div class="top"><span class="dot weak"></span><span class="en">${esc(w.en)}</span><button class="spk" data-say="${esc(w.ex)}">${SPK_SVG}</button></div><div class="ja">${esc(w.ja)}</div><div class="exja" style="font-size:13px;color:var(--ink)">${esc(w.ex)}</div></div>`).join('')}</div></div>` : `<div class="card" style="text-align:center">🌟 全問正解！ 完璧なフライトでした。</div>`}
+    ${uniq.length? `<div><div class="h-row" style="margin-bottom:10px"><h2>今回の苦手</h2><span class="sub">${uniq.length}語</span></div><div class="miss-list">${uniq.map(w=>`<div class="wrow"><div class="top"><span class="dot weak"></span><span class="en">${esc(w.en)}</span>${starBtn(w.id)}<button class="spk" data-say="${esc(w.ex)}">${SPK_SVG}</button></div><div class="ja">${esc(w.ja)}</div><div class="exja" style="font-size:13px;color:var(--ink)">${esc(w.ex)}</div></div>`).join('')}</div></div>` : `<div class="card" style="text-align:center">🌟 全問正解！ 完璧なフライトでした。</div>`}
     <div class="s-foot">${uniq.length? '<button class="btn ghost" id="retry">苦手だけもう一回</button>':''}<button class="btn primary" id="home">ホームへ</button></div>`;
   $$('#s-body .spk').forEach(b=>b.addEventListener('click',()=>speak(b.dataset.say)));
   $('#home').addEventListener('click',()=>endSession(false));
