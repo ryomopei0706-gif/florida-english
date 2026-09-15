@@ -696,7 +696,7 @@ function startSession(opt={}){
   const n=Math.min(DUR[S.settings.duration], pool.length); if(!n){ toast('出題できる単語がありません'); return; }
   const picked = opt.ids? shuffle(pool).slice(0,n) : weightedPick(pool,n);
   sess={ q: picked.map(w=>{ const mode=pickMode(); const kind = mode==='speaking'? (Math.random()<0.6?'p':'w') : mode==='listening'? (Math.random()<0.7?'p':'w') : 'w'; return {w,mode,kind}; }), i:0, results:[], xp:0, label:opt.label||'' };
-  $('#session').hidden=false; document.body.style.overflow='hidden';
+  $('#session').hidden=false; document.body.style.overflow='hidden'; window.scrollTo(0,0);
   renderQ();
 }
 function endSession(force){
