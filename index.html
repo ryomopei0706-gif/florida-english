@@ -143,6 +143,13 @@ p{margin:0}
 .cat .num b{color:var(--ink);font-weight:500}
 .cat .bar{height:6px}
 .cat.done .nm::after{content:" ✓";color:var(--ok)}
+.cat .bar{position:relative}
+.cat .bar i.master{position:absolute;left:0;top:0;background:var(--ok)}
+.minis{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.mini{display:flex;flex-direction:column;gap:2px;align-items:center}
+.mini span{font-size:10px;line-height:1}
+.mini .bar{height:3px;width:100%}
+.mini.full .bar i{background:var(--ok)}
 
 .badges{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
 .badges::-webkit-scrollbar{display:none}
@@ -310,7 +317,7 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
     </div>
     <div class="pass-foot">
       <span>学習 <b id="day-n" class="tnum">1</b> 日目</span>
-      <span>習得 <b id="mastered-n" class="tnum">0</b> / 500</span>
+      <span>正答済 <b id="correct-n" class="tnum">0</b> / 500</span>
       <span>ペース <b id="pace-n" class="tnum">—</b> 語/日</span>
     </div>
   </div>
@@ -352,7 +359,7 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
   </div>
 
   <div>
-    <div class="h-row" style="margin-bottom:10px"><h2>ジャンル別</h2><span class="sub">タップでそのジャンルを学習</span></div>
+    <div class="h-row" style="margin-bottom:10px"><h2>ジャンル別 <span class="sub" id="board-mode"></span></h2><span class="sub">タップで学習</span></div>
     <div class="board" id="board"></div>
   </div>
 
@@ -458,7 +465,7 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
 <script>
 'use strict';
 /* ================= state ================= */
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 DIALOGS.forEach((d,i)=>{ d.id='d'+i; d.en=d.q; d.ja=d.qja; d.ex=d.a; d.exja=d.aja; });
 const KEY = 'florida500_v1';
 const DUR = {3:8, 5:14, 10:28, 20:55};
@@ -528,6 +535,12 @@ function weightOf(id){
   if(isStar(id)) w *= 1.6;
   return w;
 }
+const MODE_LABEL={mix:'ミックス',speaking:'話す',listening:'聞く',reading:'読む',quiz:'4択',dialog:'受け答え'};
+const MODE_ICON={mix:'✨',speaking:'🎤',listening:'🎧',reading:'📖',quiz:'🔀',dialog:'💬'};
+function everCorrect(id, mode){ const s=S.stats[id]; if(!s) return false; if(!mode||mode==='mix') return s.c>0; return !!(s.m && s.m[mode] && s.m[mode][1]>0); }
+function catItems(c, mode){ if(mode==='dialog') return DIALOGS.filter(d=>d.c===c); if(mode==='mix') return WORDS.filter(w=>w.c===c).concat(DIALOGS.filter(d=>d.c===c)); return WORDS.filter(w=>w.c===c); }
+function catDone(c, mode){ return catItems(c,mode).filter(it=>everCorrect(it.id, mode)).length; }
+const wordsCorrect = () => WORDS.filter(w=>everCorrect(w.id,'mix')).length;
 const catTotal = c => WORDS.filter(w=>w.c===c).length;
 const catMastered = c => WORDS.filter(w=>w.c===c && statusOf(w.id)==='mastered').length;
 const totalMastered = () => WORDS.filter(w=>statusOf(w.id)==='mastered').length;
@@ -653,8 +666,8 @@ function renderHome(){
   const x0=36, x1=296, wx = x0 + (x1-x0)*frac;
   $('#route').setAttribute('x2', wx);
   $('#walker').setAttribute('transform', `translate(${wx} 72)`);
-  const mastered=totalMastered(); $('#mastered-n').textContent = mastered;
-  $('#pace-n').textContent = left>0? Math.ceil((500-mastered)/left) : '—';
+  const wc=wordsCorrect(); $('#correct-n').textContent = wc;
+  $('#pace-n').textContent = left>0? Math.ceil((WORDS.length-wc)/left) : '—';
   const L=levelOf(p.xp); $('#lv-n').textContent = L; $('#lv-title').textContent = titleOf(L);
   $('#lv-sub').textContent = `Lv.${L} · ${p.xp} XP · 次まで ${cum(L+1)-p.xp} XP`;
   $('#lv-bar').style.width = Math.round((p.xp-cum(L))/(cum(L+1)-cum(L))*100)+'%';
@@ -672,7 +685,11 @@ function renderHome(){
   const wk=weakIds().length; $('#weak-n').textContent = wk; $('#btn-weak').disabled = wk===0;
   const sk=starIds().length; $('#star-n').textContent = sk; $('#btn-star').disabled = sk===0;
   // board
-  $('#board').innerHTML = CATEGORIES.map(c=>{ const t=catTotal(c.id), m=catMastered(c.id); return `<button class="cat ${m===t?'done':''}" data-c="${c.id}"><span class="ic">${c.icon}</span><span class="nm">${esc(c.name)}</span><span class="num"><b>${m}</b> / ${t}</span><span class="bar"><i style="width:${Math.round(m/t*100)}%"></i></span></button>`; }).join('');
+  const bm=st.mode; $('#board-mode').textContent = `· ${MODE_ICON[bm]} ${MODE_LABEL[bm]}の正答済`;
+  $('#board').innerHTML = CATEGORIES.map(c=>{
+    const t=catItems(c.id,bm).length, d=catDone(c.id,bm), m=(bm==='dialog')?0:catMastered(c.id);
+    const minis=['speaking','listening','reading','quiz','dialog'].map(k=>{ const tt=catItems(c.id,k).length, dd=catDone(c.id,k); return `<span class="mini ${tt&&dd===tt?'full':''}" title="${MODE_LABEL[k]} ${dd}/${tt}"><span>${MODE_ICON[k]}</span><span class="bar"><i style="width:${tt?Math.round(dd/tt*100):0}%"></i></span></span>`; }).join('');
+    return `<button class="cat ${t&&d===t?'done':''}" data-c="${c.id}"><span class="ic">${c.icon}</span><span class="nm">${esc(c.name)}</span><span class="num"><b>${d}</b> / ${t}${m?` · 習得${m}`:''}</span><span class="bar"><i style="width:${t?Math.round(d/t*100):0}%"></i>${m?`<i class="master" style="width:${Math.round(m/t*100)}%"></i>`:''}</span><span class="minis">${minis}</span></button>`; }).join('');
   $$('#board .cat').forEach(b=>b.addEventListener('click',()=>{ S.settings.cats=[+b.dataset.c]; save(); startSession(); }));
   // badges
   const got=new Set(p.badges);
@@ -697,7 +714,7 @@ $('#sheet-cats').addEventListener('click',e=>{ if(e.target.id==='sheet-cats'){ $
 /* ================= words ================= */
 let wcat=-1;
 function renderWords(){
-  $('#words-count').textContent = `${totalMastered()} / ${WORDS.length} 習得`;
+  $('#words-count').textContent = `正答済 ${wordsCorrect()} · 習得 ${totalMastered()} / ${WORDS.length}`;
   $('#wcats').innerHTML = `<button class="chip ${wcat===-1?'on':''}" data-c="-1">すべて</button><button class="chip ${wcat==='star'?'on':''}" data-c="star">★ 星つき</button>` + CATEGORIES.map(c=>`<button class="chip ${wcat===c.id?'on':''}" data-c="${c.id}">${c.icon} ${esc(c.name)}</button>`).join('');
   $$('#wcats .chip').forEach(ch=>ch.addEventListener('click',()=>{ wcat= ch.dataset.c==='star'? 'star' : +ch.dataset.c; renderWords(); }));
   renderWordList();
@@ -788,7 +805,7 @@ function startSession(opt={}){
     queue = modes.map(m=> m==='dialog'? mk(dp.pop(),'dialog') : mk(wp.pop(), m));
   }
   if(!queue.length){ toast('出題できる問題がありません'); return; }
-  sess={ q:queue, i:0, results:[], xp:0, label:opt.label||'' };
+  sess={ q:queue, i:0, results:[], xp:0, label:opt.label||'', snap:CATEGORIES.map(c=>catDone(c.id,'mix')) };
   $('#session').hidden=false; document.body.style.overflow='hidden'; window.scrollTo(0,0);
   renderQ();
 }
@@ -802,7 +819,7 @@ $('#s-close').addEventListener('click',()=>endSession(true));
 function record(q, correct, viaVoice){
   const s=S.stats[q.w.id]||{a:0,c:0,s:0,l:0,h:''};
   s.a++; if(correct){ s.c++; s.s=s.s>0?s.s+1:1; } else { s.s=s.s<0?s.s-1:-1; }
-  s.l=Date.now(); s.h=(s.h+(correct?'1':'0')).slice(-6); S.stats[q.w.id]=s;
+  s.l=Date.now(); s.h=(s.h+(correct?'1':'0')).slice(-6); s.m=s.m||{}; const mm=s.m[q.mode]||[0,0]; mm[0]++; if(correct) mm[1]++; s.m[q.mode]=mm; S.stats[q.w.id]=s;
   const p=S.profile; p.answered++; if(correct) p.correct++; if(correct&&viaVoice) p.voiceCorrect++;
   const gain = correct? XP_OF[q.mode] : 2;
   p.xp+=gain; sess.xp+=gain;
@@ -887,6 +904,7 @@ function flipLast(){
   const r=sess.results[sess.results.length-1]; if(!r) return; const s=S.stats[r.q.w.id]; const p=S.profile; const was=r.correct;
   r.correct=!was; s.h=s.h.slice(0,-1)+(r.correct?'1':'0');
   if(r.correct){ s.c++; s.s = s.s<0? 1 : s.s+1; p.correct++; } else { s.c--; s.s = s.s>0? -1 : s.s-1; p.correct--; }
+  if(s.m && s.m[r.q.mode]) s.m[r.q.mode][1] += r.correct? 1 : -1;
   // recompute streak roughly from history
   let st=0; for(let i=s.h.length-1;i>=0;i--){ const c=s.h[i]==='1'; if(i===s.h.length-1) st=c?1:-1; else if((st>0&&c)||(st<0&&!c)) st+= c?1:-1; else break; } s.s=st;
   const gain=XP_OF[r.q.mode]; const delta = r.correct? gain-2 : 2-gain; p.xp+=delta; sess.xp+=delta; const d=p.days[today()]; if(d){ d.xp+=delta; d.c+= r.correct?1:-1; }
@@ -1011,6 +1029,7 @@ function renderResult(){
     ${after>before? `<div class="lvup">🎉 レベルアップ！ Lv.${after} 「${titleOf(after)}」</div>`:''}
     ${newBadges.map(b=>`<div class="lvup" style="background:var(--lagoon-soft);color:var(--lagoon)">${b.ic} 実績「${b.nm}」を獲得</div>`).join('')}
     <div class="card"><div class="level"><div class="badge tnum">${after}</div><div class="t"><b>${titleOf(after)}</b><span>${p.xp} XP · 次まで ${cum(after+1)-p.xp} XP</span></div></div><div class="bar acc"><i style="width:${Math.round((p.xp-cum(after))/(cum(after+1)-cum(after))*100)}%"></i></div></div>
+    ${(()=>{ const rows=CATEGORIES.map((c,i)=>{ const now=catDone(c.id,'mix'), t=catItems(c.id,'mix').length, delta=now-(sess.snap?sess.snap[i]:now); return delta>0? `<div class="set" style="padding:8px 0"><div class="k">${c.icon} ${esc(c.name)}<small>正答済 ${now} / ${t}${now===t?' · 制覇！':''}</small></div><b style="color:var(--ok)">+${delta}</b></div>` : ''; }).filter(Boolean); return rows.length? `<div class="card"><h2 style="font-size:15px">ジャンル別バーの進み</h2>${rows.join('')}</div>` : ''; })()}
     ${uniq.length? `<div><div class="h-row" style="margin-bottom:10px"><h2>今回の苦手</h2><span class="sub">${uniq.length}語</span></div><div class="miss-list">${uniq.map(w=>`<div class="wrow"><div class="top"><span class="dot weak"></span><span class="en">${esc(w.en)}</span>${starBtn(w.id)}<button class="spk" data-say="${esc(w.ex)}">${SPK_SVG}</button></div><div class="ja">${esc(w.ja)}</div><div class="exja" style="font-size:13px;color:var(--ink)">${esc(w.ex)}</div></div>`).join('')}</div></div>` : `<div class="card" style="text-align:center">🌟 全問正解！ 完璧なフライトでした。</div>`}
     <div class="s-foot">${uniq.length? '<button class="btn ghost" id="retry">苦手だけもう一回</button>':''}<button class="btn primary" id="home">ホームへ</button></div>`;
   $$('#s-body .spk').forEach(b=>b.addEventListener('click',()=>speak(b.dataset.say)));
