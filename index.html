@@ -115,6 +115,9 @@ p{margin:0}
 .seg{display:flex;background:var(--card2);border-radius:14px;padding:4px;gap:4px}
 .seg button{flex:1;padding:9px 4px;border-radius:11px;font-size:13px;font-weight:600;color:var(--ink2)}
 .seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow-sm)}
+.seg.grid{display:grid;grid-template-columns:repeat(3,1fr)}
+.mute{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:99px;background:var(--card2);font-size:12px;font-weight:700;color:var(--ink2)}
+.mute.on{background:var(--ng-soft);color:var(--ng)}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{padding:8px 14px;border-radius:99px;background:var(--card2);font-size:13px;font-weight:600;color:var(--ink2);border:1.5px solid transparent}
 .chip.on{background:var(--lagoon-soft);color:var(--lagoon);border-color:var(--lagoon)}
@@ -328,8 +331,12 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
         <button data-v="3">3分</button><button data-v="5">5分</button><button data-v="10">10分</button><button data-v="20">20分</button>
       </div></div>
     <div class="field"><span class="lab">出題形式</span>
-      <div class="seg" id="seg-mode">
-        <button data-v="mix">ミックス</button><button data-v="speaking">話す</button><button data-v="listening">聞く</button><button data-v="reading">読む</button>
+      <div class="seg grid" id="seg-mode">
+        <button data-v="mix">ミックス</button><button data-v="speaking">🎤 話す</button><button data-v="listening">🎧 聞く</button><button data-v="reading">📖 読む</button><button data-v="quiz">🔀 4択</button><button data-v="dialog">💬 受け答え</button>
+      </div></div>
+    <div class="field" id="quiz-dir-field"><span class="lab">4択の向き</span>
+      <div class="seg" id="seg-qdir">
+        <button data-v="e2j">英 → 和</button><button data-v="j2e">和 → 英</button><button data-v="mix">ミックス</button>
       </div></div>
     <div class="field"><span class="lab">範囲</span>
       <button class="range-btn" id="range-btn"><span id="range-label">すべてのジャンル</span><span>変更 ›</span></button></div>
@@ -387,6 +394,8 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
     <div class="set"><div class="k">話す（和→英を声で）</div><button class="switch" id="mix-speaking" role="switch"></button></div>
     <div class="set"><div class="k">聞く（英語音声→意味を選ぶ）</div><button class="switch" id="mix-listening" role="switch"></button></div>
     <div class="set"><div class="k">読む（英→和カード）</div><button class="switch" id="mix-reading" role="switch"></button></div>
+    <div class="set"><div class="k">4択（単語の意味・英語を選ぶ）</div><button class="switch" id="mix-quiz" role="switch"></button></div>
+    <div class="set"><div class="k">受け答え（相手の一言に返す）</div><button class="switch" id="mix-dialog" role="switch"></button></div>
   </div>
 
   <div class="card">
@@ -438,10 +447,12 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
 </div>
 
 <script src="data.js"></script>
+<script src="dialog.js"></script>
 <script>
 'use strict';
 /* ================= state ================= */
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
+DIALOGS.forEach((d,i)=>{ d.id='d'+i; d.en=d.q; d.ja=d.qja; d.ex=d.a; d.exja=d.aja; });
 const KEY = 'florida500_v1';
 const DUR = {3:8, 5:14, 10:28, 20:55};
 const TITLES = ['旅の準備中','パスポート取得','荷造り完了','空港に到着','チェックイン完了','保安検査を通過','搭乗ゲートへ','離陸','太平洋を横断中','乗り継ぎ成功','オーランドに着陸','入国審査クリア','ホテルにチェックイン','パークデビュー','パレードを制覇','花火を見届けた','パークホッパー','ローカルの常連','フロリダ通','フロリダマスター'];
@@ -471,7 +482,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&
 
 function defaults(){ return {
   v:1,
-  settings:{goal:'2026-11-14', start:today(), duration:5, mode:'mix', cats:[], autoPlay:true, strict:0.7, rate:0.95, voice:'', mixModes:{speaking:true,listening:true,reading:true}},
+  settings:{goal:'2026-11-14', start:today(), duration:5, mode:'mix', cats:[], autoPlay:true, strict:0.7, rate:0.95, voice:'', quizDir:'mix', dialogMute:false, mixModes:{speaking:true,listening:true,reading:true,quiz:true,dialog:true}},
   stats:{},
   profile:{xp:0, sessions:0, answered:0, correct:0, voiceCorrect:0, days:{}, streak:0, bestStreak:0, lastDay:null, badges:[]}
 };}
@@ -480,7 +491,7 @@ let S = defaults();
   let saved=null; try{ saved = JSON.parse(localStorage.getItem(KEY)); }catch(e){}
   if(!saved) return;
   Object.assign(S.settings, saved.settings||{});
-  S.settings.mixModes = Object.assign({speaking:true,listening:true,reading:true}, (saved.settings||{}).mixModes||{});
+  S.settings.mixModes = Object.assign({speaking:true,listening:true,reading:true,quiz:true,dialog:true}, (saved.settings||{}).mixModes||{});
   S.settings.cats = Array.isArray(S.settings.cats)? S.settings.cats : [];
   S.stats = saved.stats||{};
   Object.assign(S.profile, saved.profile||{});
@@ -637,8 +648,10 @@ function renderHome(){
   // setup
   $$('#seg-dur button').forEach(b=>b.classList.toggle('on', +b.dataset.v===st.duration));
   $$('#seg-mode button').forEach(b=>b.classList.toggle('on', b.dataset.v===st.mode));
+  $$('#seg-qdir button').forEach(b=>b.classList.toggle('on', b.dataset.v===st.quizDir));
+  $('#quiz-dir-field').hidden = !(st.mode==='quiz' || (st.mode==='mix' && st.mixModes.quiz));
   $('#range-label').textContent = st.cats.length? st.cats.map(c=>CATEGORIES[c].icon+' '+CATEGORIES[c].name).join('・') : 'すべてのジャンル';
-  const pool = poolWords(); const n=Math.min(DUR[st.duration], pool.length);
+  const n=Math.min(DUR[st.duration], st.mode==='dialog'? poolDialogs().length : poolWords().length);
   $('#setup-sub').textContent = `${n}問 · 約${st.duration}分`;
   $('#btn-start').textContent = `学習を始める · ${n}問`;
   const wk=weakIds().length; $('#weak-n').textContent = wk; $('#btn-weak').disabled = wk===0;
@@ -652,6 +665,7 @@ function renderHome(){
 }
 $$('#seg-dur button').forEach(b=>b.addEventListener('click',()=>{ S.settings.duration=+b.dataset.v; save(); renderHome(); }));
 $$('#seg-mode button').forEach(b=>b.addEventListener('click',()=>{ S.settings.mode=b.dataset.v; save(); renderHome(); }));
+$$('#seg-qdir button').forEach(b=>b.addEventListener('click',()=>{ S.settings.quizDir=b.dataset.v; save(); renderHome(); }));
 $('#btn-start').addEventListener('click',()=>startSession());
 $('#btn-weak').addEventListener('click',()=>startSession({ids:weakIds(), label:'苦手集中'}));
 
@@ -690,7 +704,7 @@ function renderSettings(){
   $('#set-autoplay').classList.toggle('on', st.autoPlay);
   $('#set-rate').value=st.rate; $('#rate-v').textContent=st.rate.toFixed(2);
   $('#set-strict').value=st.strict; $('#strict-v').textContent=Math.round(st.strict*100)+'% 一致で正解';
-  ['speaking','listening','reading'].forEach(m=>$('#mix-'+m).classList.toggle('on', st.mixModes[m]));
+  ['speaking','listening','reading','quiz','dialog'].forEach(m=>$('#mix-'+m).classList.toggle('on', st.mixModes[m]));
   fillVoiceSelect();
   $('#sr-note').textContent = SR? '音声認識: この端末で使えます（初回はマイクの許可が出ます）。反応しないときは上の診断を押してください' : '音声認識: '+recErrorText('unsupported')+'。話す問題は自己採点になります';
   $('#ver').textContent = `v${VERSION} · ${WORDS.length} words`;
@@ -709,32 +723,54 @@ $('#btn-mic-test').addEventListener('click',()=>{
     onFinal:alts=>{ out.textContent = env+(alts.length? ` … 成功！ 聞き取り結果: 「${alts[0]}」` : ' … 声が取れませんでした（無音）'); },
     onError:err=>{ out.textContent = env+' … 失敗 ['+err+'] '+recErrorText(err); if(openInSafariHtml && !$('#open-safari2')){ const d=document.createElement('div'); d.id='open-safari2'; d.innerHTML=openInSafariHtml; out.after(d); } } });
 });
-['speaking','listening','reading'].forEach(m=>$('#mix-'+m).addEventListener('click',()=>{ const mm=S.settings.mixModes; mm[m]=!mm[m]; if(!Object.values(mm).some(Boolean)) mm[m]=true; save(); renderSettings(); }));
+['speaking','listening','reading','quiz','dialog'].forEach(m=>$('#mix-'+m).addEventListener('click',()=>{ const mm=S.settings.mixModes; mm[m]=!mm[m]; if(!Object.values(mm).some(Boolean)) mm[m]=true; save(); renderSettings(); }));
 $('#btn-export').addEventListener('click',()=>{ $('#bk').value=JSON.stringify(S); toast('書き出しました'); });
 $('#btn-copy').addEventListener('click',async()=>{ const txt=JSON.stringify(S); $('#bk').value=txt; try{ await navigator.clipboard.writeText(txt); toast('コピーしました'); }catch(e){ $('#bk').select(); toast('テキストを選択してコピーしてください'); } });
 $('#btn-import').addEventListener('click',()=>{ try{ const o=JSON.parse($('#bk').value); if(!o||!o.profile||!o.stats) throw 0; if(!confirm('現在の記録を上書きして取り込みます。よろしいですか？')) return; localStorage.setItem(KEY, JSON.stringify(o)); location.reload(); }catch(e){ toast('形式が正しくありません'); } });
 $('#btn-reset-stats').addEventListener('click',()=>{ if(!confirm('正答率・XP・実績をすべて消します。設定は残ります。よろしいですか？')) return; S.stats={}; S.profile=defaults().profile; save(); toast('リセットしました'); renderSettings(); });
 
 /* ================= session ================= */
+const XP_OF={speaking:15,listening:10,reading:8,quiz:8,dialog:10};
 let sess=null;
+function poolDialogs(){ const c=S.settings.cats; return c.length? DIALOGS.filter(d=>c.includes(d.c)) : DIALOGS.slice(); }
 function poolWords(){ const c=S.settings.cats; return c.length? WORDS.filter(w=>c.includes(w.c)) : WORDS.slice(); }
 function weightedPick(pool, n){
   const items=pool.map(w=>({w, wt:weightOf(w.id)})); const out=[];
   while(out.length<n && items.length){ let tot=items.reduce((a,b)=>a+b.wt,0), r=Math.random()*tot, i=0; for(;i<items.length;i++){ r-=items[i].wt; if(r<=0) break; } i=Math.min(i,items.length-1); out.push(items[i].w); items.splice(i,1); }
   return out;
 }
-function pickMode(){
-  const m=S.settings.mode; if(m!=='mix') return m;
-  const en=Object.entries(S.settings.mixModes).filter(([k,v])=>v).map(([k])=>k);
-  const wts={speaking:0.5,listening:0.25,reading:0.25}; let tot=en.reduce((a,k)=>a+wts[k],0), r=Math.random()*tot;
-  for(const k of en){ r-=wts[k]; if(r<=0) return k; } return en[en.length-1]||'reading';
+const MIX_W={speaking:0.35,listening:0.15,reading:0.15,quiz:0.2,dialog:0.15};
+function pickMode(except){
+  const m=S.settings.mode; if(m!=='mix') return m===except? 'quiz' : m;
+  const en=Object.entries(S.settings.mixModes).filter(([k,v])=>v && k!==except).map(([k])=>k);
+  if(!en.length) return 'reading';
+  let tot=en.reduce((a,k)=>a+MIX_W[k],0), r=Math.random()*tot;
+  for(const k of en){ r-=MIX_W[k]; if(r<=0) return k; } return en[en.length-1];
+}
+function quizKind(){ const d=S.settings.quizDir; return d==='mix'? (Math.random()<0.5?'e2j':'j2e') : d; }
+function mk(w, mode){
+  const kind = mode==='speaking'? (Math.random()<0.6?'p':'w') : mode==='listening'? (Math.random()<0.7?'p':'w') : mode==='quiz'? quizKind() : mode==='dialog'? 'p' : 'w';
+  return {w, mode, kind};
 }
 function startSession(opt={}){
   unlockAudio();
-  let pool = opt.ids? WORDS.filter(w=>opt.ids.includes(w.id)) : poolWords();
-  const n=Math.min(DUR[S.settings.duration], pool.length); if(!n){ toast('出題できる単語がありません'); return; }
-  const picked = opt.ids? shuffle(pool).slice(0,n) : weightedPick(pool,n);
-  sess={ q: picked.map(w=>{ const mode=pickMode(); const kind = mode==='speaking'? (Math.random()<0.6?'p':'w') : mode==='listening'? (Math.random()<0.7?'p':'w') : 'w'; return {w,mode,kind}; }), i:0, results:[], xp:0, label:opt.label||'' };
+  const cap=DUR[S.settings.duration]; let queue=[];
+  if(opt.ids){
+    const set=new Set(opt.ids);
+    const items=shuffle(WORDS.filter(w=>set.has(w.id)).concat(DIALOGS.filter(d=>set.has(d.id)))).slice(0,cap);
+    queue = items.map(it=> it.q? mk(it,'dialog') : mk(it, pickMode('dialog')));
+  } else {
+    const dpool=poolDialogs(), wpool=poolWords();
+    const n=Math.min(cap, S.settings.mode==='dialog'? dpool.length : wpool.length);
+    let modes=Array.from({length:n}, ()=>pickMode());
+    let over = modes.filter(m=>m==='dialog').length - dpool.length;
+    modes = modes.map(m=>{ if(m==='dialog' && over>0){ over--; return S.settings.mode==='dialog'? null : pickMode('dialog'); } return m; }).filter(Boolean);
+    const nd=modes.filter(m=>m==='dialog').length;
+    const dp=weightedPick(dpool, nd), wp=weightedPick(wpool, modes.length-nd);
+    queue = modes.map(m=> m==='dialog'? mk(dp.pop(),'dialog') : mk(wp.pop(), m));
+  }
+  if(!queue.length){ toast('出題できる問題がありません'); return; }
+  sess={ q:queue, i:0, results:[], xp:0, label:opt.label||'' };
   $('#session').hidden=false; document.body.style.overflow='hidden'; window.scrollTo(0,0);
   renderQ();
 }
@@ -750,7 +786,7 @@ function record(q, correct, viaVoice){
   s.a++; if(correct){ s.c++; s.s=s.s>0?s.s+1:1; } else { s.s=s.s<0?s.s-1:-1; }
   s.l=Date.now(); s.h=(s.h+(correct?'1':'0')).slice(-6); S.stats[q.w.id]=s;
   const p=S.profile; p.answered++; if(correct) p.correct++; if(correct&&viaVoice) p.voiceCorrect++;
-  const gain = correct? ({speaking:15,listening:10,reading:8})[q.mode] : 2;
+  const gain = correct? XP_OF[q.mode] : 2;
   p.xp+=gain; sess.xp+=gain;
   const d=p.days[today()]||{q:0,c:0,xp:0}; d.q++; if(correct) d.c++; d.xp+=gain; p.days[today()]=d;
   sess.results.push({q, correct}); save();
@@ -762,6 +798,8 @@ function renderQ(){
   const cat=`<span class="catl">${CATEGORIES[q.w.c].icon} ${esc(CATEGORIES[q.w.c].name)}${sess.label?` · ${sess.label}`:''}</span>`;
   if(q.mode==='speaking') renderSpeaking(q, body, cat);
   else if(q.mode==='listening') renderListening(q, body, cat);
+  else if(q.mode==='quiz') renderQuiz(q, body, cat);
+  else if(q.mode==='dialog') renderDialog(q, body, cat);
   else renderReading(q, body, cat);
   $('#session').scrollTo(0,0);
 }
@@ -833,7 +871,7 @@ function flipLast(){
   if(r.correct){ s.c++; s.s = s.s<0? 1 : s.s+1; p.correct++; } else { s.c--; s.s = s.s>0? -1 : s.s-1; p.correct--; }
   // recompute streak roughly from history
   let st=0; for(let i=s.h.length-1;i>=0;i--){ const c=s.h[i]==='1'; if(i===s.h.length-1) st=c?1:-1; else if((st>0&&c)||(st<0&&!c)) st+= c?1:-1; else break; } s.s=st;
-  const gain=({speaking:15,listening:10,reading:8})[r.q.mode]; const delta = r.correct? gain-2 : 2-gain; p.xp+=delta; sess.xp+=delta; const d=p.days[today()]; if(d){ d.xp+=delta; d.c+= r.correct?1:-1; }
+  const gain=XP_OF[r.q.mode]; const delta = r.correct? gain-2 : 2-gain; p.xp+=delta; sess.xp+=delta; const d=p.days[today()]; if(d){ d.xp+=delta; d.c+= r.correct?1:-1; }
   save();
 }
 
@@ -879,6 +917,55 @@ function renderReading(q, body, cat){
     if(S.settings.autoPlay) speak(w.en);
   };
   $('#reveal').addEventListener('click',reveal); $('#qcard').addEventListener('click',reveal);
+}
+
+/* ---- quiz (4択) ---- */
+function pickChoices(w, field, pool){
+  const same=pool.filter(x=>x.id!==w.id && x.c===w.c), others=pool.filter(x=>x.id!==w.id && x.c!==w.c);
+  const cand=shuffle(same).concat(shuffle(others)); const answer=w[field]; const opts=[answer]; const seen=new Set([answer]);
+  for(const x of cand){ const t=x[field]; if(!seen.has(t)){ seen.add(t); opts.push(t); } if(opts.length===4) break; }
+  return {opts:shuffle(opts), answer};
+}
+function renderQuiz(q, body, cat){
+  const w=q.w, e2j=q.kind==='e2j'; const {opts,answer}=pickChoices(w, e2j?'ja':'en', WORDS);
+  body.innerHTML = `<span class="mode-tag">🔀 Quiz · ${e2j?'英 → 和':'和 → 英'}</span>
+    <div class="qcard">${cat}<div class="prompt ${e2j?'en-big':'ja'}">${esc(e2j? w.en : w.ja)}</div><div class="hint">${e2j?'意味はどれ？':'英語はどれ？'}</div><div id="ans"></div></div>
+    <div class="choices" id="choices">${opts.map((o,i)=>`<button class="choice" data-i="${i}" ${e2j?'':'style="font-weight:700"'}>${esc(o)}</button>`).join('')}</div>
+    <div class="s-foot" id="foot"></div>`;
+  $$('#choices .choice').forEach(b=>b.addEventListener('click',()=>{
+    const correct = opts[+b.dataset.i]===answer;
+    $$('#choices .choice').forEach(c=>{ c.disabled=true; if(opts[+c.dataset.i]===answer) c.classList.add('ok'); }); if(!correct) b.classList.add('ng');
+    record(q, correct, false);
+    $('#ans').outerHTML = answerBlock(w, null);
+    const foot=$('#foot'); foot.innerHTML=`<div class="verdict ${correct?'ok':'ng'}">${correct?'✓ 正解':'✗ 不正解'}</div><button class="btn ghost sm" id="say">🔊 発音を聞く</button>`; foot.appendChild(nextBtn());
+    $('#say').addEventListener('click',()=>speak(w.ex));
+    if(S.settings.autoPlay) speak(w.en);
+  }));
+}
+/* ---- dialog (受け答え) ---- */
+function renderDialog(q, body, cat){
+  const d=q.w; const {opts,answer}=pickChoices(d, 'a', DIALOGS);
+  const muted=()=>S.settings.dialogMute;
+  body.innerHTML = `<span class="mode-tag">💬 Response</span>
+    <div class="qcard">${cat}
+      <div style="display:flex;align-items:center;gap:10px"><button class="spk" id="play" aria-label="再生" style="width:44px;height:44px">${SPK_SVG}</button><span class="hint" style="flex:1">相手にこう言われた。どう返す？</span><button class="mute ${muted()?'on':''}" id="mute">${muted()?'🔇 音声オフ':'🔊 音声オン'}</button></div>
+      <div class="prompt" style="font-size:22px">${esc(d.q)}</div>
+      <div id="ans"></div></div>
+    <div class="choices" id="choices">${opts.map((o,i)=>`<button class="choice" data-i="${i}">${esc(o)}</button>`).join('')}</div>
+    <div class="s-foot" id="foot"></div>`;
+  const play=(r)=>{ if(muted()) return; const p=$('#play'); if(!p) return; p.classList.add('playing'); speak(d.q, r, ()=>{ const p2=$('#play'); if(p2) p2.classList.remove('playing'); }); };
+  $('#play').addEventListener('click',()=>{ if(muted()){ toast('音声オフになっています'); return; } play(); });
+  $('#mute').addEventListener('click',()=>{ S.settings.dialogMute=!S.settings.dialogMute; save(); const b=$('#mute'); b.classList.toggle('on',muted()); b.textContent=muted()?'🔇 音声オフ':'🔊 音声オン'; if(muted()) speechSynthesis.cancel(); else play(); });
+  setTimeout(()=>play(), 300);
+  $$('#choices .choice').forEach(b=>b.addEventListener('click',()=>{
+    const correct = opts[+b.dataset.i]===answer;
+    $$('#choices .choice').forEach(c=>{ c.disabled=true; if(opts[+c.dataset.i]===answer) c.classList.add('ok'); }); if(!correct) b.classList.add('ng');
+    record(q, correct, false);
+    $('#ans').outerHTML = `<div class="ans"><div class="ja"><span class="eyebrow">相手</span><br>${esc(d.qja)}</div><div class="ex" style="margin-top:10px"><span class="eyebrow">あなたの返し</span><br><b>${esc(d.a)}</b></div><div class="exja">${esc(d.aja)}</div></div>`;
+    const foot=$('#foot'); foot.innerHTML=`<div class="verdict ${correct?'ok':'ng'}">${correct?'✓ 正解':'✗ 不正解'}</div><div class="row2"><button class="btn ghost sm" id="say-q">🔊 相手の一言</button><button class="btn ghost sm" id="say-a">🔊 返し方</button></div>`; foot.appendChild(nextBtn());
+    $('#say-q').addEventListener('click',()=>speak(d.q)); $('#say-a').addEventListener('click',()=>speak(d.a));
+    if(S.settings.autoPlay && !muted()) speak(d.a);
+  }));
 }
 
 /* ---- result ---- */

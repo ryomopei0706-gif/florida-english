@@ -1,6 +1,6 @@
 // Florida 500 – offline cache. index.html/data.js はネット優先（更新を拾う）、それ以外はキャッシュ優先。
-const CACHE = 'florida500-v3';
-const ASSETS = ['./', './index.html', './data.js', './manifest.webmanifest', './icon-180.png', './icon-512.png'];
+const CACHE = 'florida500-v4';
+const ASSETS = ['./', './index.html', './data.js', './dialog.js', './manifest.webmanifest', './icon-180.png', './icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {

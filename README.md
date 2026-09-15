@@ -5,6 +5,7 @@
 ## 構成
 - `index.html` … アプリ本体（1ファイル）
 - `data.js` … 単語データ。**手で編集しない**。`tools/build_data.py` が Obsidian の `04_Private/フロリダ旅行_英単語500.md` から生成する
+- `dialog.js` … 受け答え問題（相手の一言→自分の返し）のペア。手で追加してよい
 - `sw.js` / `manifest.webmanifest` / `icon-*.png` … オフライン動作・ホーム画面アイコン用
 
 ## 単語データを更新する
