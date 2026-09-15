@@ -458,7 +458,7 @@ textarea.bk{width:100%;min-height:90px;border:1px solid var(--line);border-radiu
 <script>
 'use strict';
 /* ================= state ================= */
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 DIALOGS.forEach((d,i)=>{ d.id='d'+i; d.en=d.q; d.ja=d.qja; d.ex=d.a; d.exja=d.aja; });
 const KEY = 'florida500_v1';
 const DUR = {3:8, 5:14, 10:28, 20:55};
@@ -963,23 +963,30 @@ function renderQuiz(q, body, cat){
 /* ---- dialog (受け答え) ---- */
 function renderDialog(q, body, cat){
   const d=q.w; const {opts,answer}=pickChoices(d, 'a', DIALOGS);
-  const muted=()=>S.settings.dialogMute;
+  const muted=()=>S.settings.dialogMute; let hinted=false;
   body.innerHTML = `<span class="mode-tag">💬 Response</span>
     <div class="qcard">${cat}
-      <div style="display:flex;align-items:center;gap:10px"><button class="spk" id="play" aria-label="再生" style="width:44px;height:44px">${SPK_SVG}</button><span class="hint" style="flex:1">相手にこう言われた。どう返す？</span><button class="mute ${muted()?'on':''}" id="mute">${muted()?'🔇 音声オフ':'🔊 音声オン'}</button></div>
-      <div class="prompt" style="font-size:22px">${esc(d.q)}</div>
+      <div class="listen-big"><button class="spk" id="play" aria-label="再生">${SPK_SVG}</button><span class="mic-l">相手にこう言われた。聞いて、どう返す？</span></div>
+      <div class="row2"><button class="btn ghost sm" id="again">🔊 もう一度</button><button class="btn ghost sm" id="slow">🐢 ゆっくり</button></div>
+      <div class="row2"><button class="btn line sm" id="hint">💡 ヒント（英文を見る）</button><button class="mute ${muted()?'on':''}" id="mute" style="justify-content:center">${muted()?'🔇 音声オフ':'🔊 音声オン'}</button></div>
+      <div class="prompt" id="qtext" style="font-size:22px" hidden>${esc(d.q)}</div>
       <div id="ans"></div></div>
     <div class="choices" id="choices">${opts.map((o,i)=>`<button class="choice" data-i="${i}">${esc(o)}</button>`).join('')}</div>
     <div class="s-foot" id="foot"></div>`;
+  const showText=()=>{ const t=$('#qtext'); if(t) t.hidden=false; const h=$('#hint'); if(h){ h.disabled=true; h.textContent='💡 英文を表示中'; } };
   const play=(r)=>{ if(muted()) return; const p=$('#play'); if(!p) return; p.classList.add('playing'); speak(d.q, r, ()=>{ const p2=$('#play'); if(p2) p2.classList.remove('playing'); }); };
   $('#play').addEventListener('click',()=>{ if(muted()){ toast('音声オフになっています'); return; } play(); });
-  $('#mute').addEventListener('click',()=>{ S.settings.dialogMute=!S.settings.dialogMute; save(); const b=$('#mute'); b.classList.toggle('on',muted()); b.textContent=muted()?'🔇 音声オフ':'🔊 音声オン'; if(muted()) speechSynthesis.cancel(); else play(); });
-  setTimeout(()=>play(), 300);
+  $('#again').addEventListener('click',()=>play()); $('#slow').addEventListener('click',()=>play(0.65));
+  $('#hint').addEventListener('click',()=>{ hinted=true; showText(); });
+  const applyMute=()=>{ const b=$('#mute'); if(!b) return; b.classList.toggle('on',muted()); b.textContent=muted()?'🔇 音声オフ':'🔊 音声オン'; if(muted()){ speechSynthesis.cancel(); showText(); } };
+  $('#mute').addEventListener('click',()=>{ S.settings.dialogMute=!S.settings.dialogMute; save(); applyMute(); if(!muted()) play(); });
+  if(muted()) showText(); else setTimeout(()=>play(), 300);
   $$('#choices .choice').forEach(b=>b.addEventListener('click',()=>{
     const correct = opts[+b.dataset.i]===answer;
     $$('#choices .choice').forEach(c=>{ c.disabled=true; if(opts[+c.dataset.i]===answer) c.classList.add('ok'); }); if(!correct) b.classList.add('ng');
     record(q, correct, false);
-    $('#ans').outerHTML = `<div class="ans"><div class="ja"><span class="eyebrow">相手</span><br>${esc(d.qja)}</div><div class="ex" style="margin-top:10px"><span class="eyebrow">あなたの返し</span><br><b>${esc(d.a)}</b></div><div class="exja">${esc(d.aja)}</div></div>`;
+    $('#qtext').remove(); $('#hint').closest('.row2').remove();
+    $('#ans').outerHTML = `<div class="ans"><span class="eyebrow">相手の一言${hinted?'（ヒント使用）':''}</span><div class="en" style="font-size:19px">${esc(d.q)}</div><div class="ja">${esc(d.qja)}</div><div class="ex" style="margin-top:10px"><span class="eyebrow">あなたの返し</span><br><b>${esc(d.a)}</b></div><div class="exja">${esc(d.aja)}</div></div>`;
     const foot=$('#foot'); foot.innerHTML=`<div class="verdict ${correct?'ok':'ng'}">${correct?'✓ 正解':'✗ 不正解'}</div><div class="row2"><button class="btn ghost sm" id="say-q">🔊 相手の一言</button><button class="btn ghost sm" id="say-a">🔊 返し方</button></div>`; foot.appendChild(nextBtn());
     $('#say-q').addEventListener('click',()=>speak(d.q)); $('#say-a').addEventListener('click',()=>speak(d.a));
     if(S.settings.autoPlay && !muted()) speak(d.a);
